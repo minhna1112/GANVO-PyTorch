@@ -1,5 +1,4 @@
 from mimetypes import init
-from turtle import forward
 import torch
 
 class Encoder(torch.nn.Module):
