@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 def downsample_conv(in_planes, out_planes, kernel_size=3):
@@ -68,7 +69,7 @@ class Decoder(torch.nn.Module):
         self.conv4 = upconv(in_planes=128, out_planes=64)
         self.conv5 = predict_disp(in_planes=64)
         
-    def forward(self):
+    def forward(self, x):
         x = self.conv0(x) # (1024, h//16, w//16)
         x = self.conv1(x) #(512, h//8, w//8)
         x = self.conv2(x) #(256, h//4, w//4)
@@ -81,7 +82,7 @@ class Decoder(torch.nn.Module):
 
 
 class DepthGenerator(torch.nn.Module):
-    def __init__(self, input_shape) -> None:
+    def __init__(self, input_shape):
         """
         Encoder + Decoder
         """
@@ -123,7 +124,7 @@ class PoseRegressor(torch.nn.Module):
             hidden_size = 1024,
             num_layers=2
         )
-        self.pose_pred = torch.nn.LSTMCell(
+        self.pose_pred = torch.nn.RNN(
             input_size=1024,
             hidden_size=6
         )
@@ -154,9 +155,25 @@ class Generator(torch.nn.Module):
         """
         Depth Generator  + Pose REgressor + View Reconstruction
         """
-        super(Generator).__init__()
+        super(Generator, self).__init__()
         self.depth_generator = DepthGenerator([3, 480, 640])
         self.pose_regressor = PoseRegressor(seq_length=3)
     
-    def forward(self):
-        pass
+    def forward(self, target_image, ref_imgs):
+        depth_o = self.depth_generator(target_image)
+        poses_o = self.pose_regressor(target_image, ref_imgs)
+        return depth_o, poses_o        
+
+
+if __name__ == "__main__":
+    x = torch.tensor(
+        np.ones([1, 3, 480, 640]),
+        dtype=torch.float32
+    )
+
+    r = [x, x]
+
+    g = Generator()
+    o = g(x, r)
+    print(o[0].size())
+    print(o[1].size())
