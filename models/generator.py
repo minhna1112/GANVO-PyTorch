@@ -1,5 +1,8 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
+
+from inverse_wrap import inverse_warp
 
 def downsample_conv(in_planes, out_planes, kernel_size=3):
     return torch.nn.Sequential(
@@ -12,18 +15,21 @@ def downsample_conv(in_planes, out_planes, kernel_size=3):
 def predict_disp(in_planes):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, 1, kernel_size=3, padding=1),
+        torch.nn.BatchNorm2d(num_features=1),
         torch.nn.Tanh()
     )
 
 def conv(in_planes, out_planes, kernel_size=3, padding=1):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, padding=padding),
-        torch.nn.ReLU(inplace=True)
+        torch.nn.BatchNorm2d(num_features=out_planes),
+        torch.nn.Tanh()
     )
 
 def upconv(in_planes, out_planes):
     return torch.nn.Sequential(
         torch.nn.ConvTranspose2d(in_planes, out_planes, kernel_size=3, stride=2, padding=1, output_padding=1),
+        torch.nn.BatchNorm2d(num_features=out_planes),
         torch.nn.ReLU(inplace=True)
     )
 
@@ -151,29 +157,57 @@ class PoseRegressor(torch.nn.Module):
 
 
 class Generator(torch.nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, intrinsics) -> None:
         """
         Depth Generator  + Pose REgressor + View Reconstruction
         """
         super(Generator, self).__init__()
+        self.intrinsics = intrinsics
         self.depth_generator = DepthGenerator([3, 480, 640])
         self.pose_regressor = PoseRegressor(seq_length=3)
     
-    def forward(self, target_image, ref_imgs):
-        depth_o = self.depth_generator(target_image)
-        poses_o = self.pose_regressor(target_image, ref_imgs)
-        return depth_o, poses_o        
+    def forward(self, tgt_img, ref_imgs):
+        depth_o = self.depth_generator(tgt_img) #[B, 1, H, W]
+        poses_o = self.pose_regressor(tgt_img, ref_imgs) #[B, num_ref_imgs, 6]
+
+        b, _, h, w = depth_o.size()
+        downscale = tgt_img.size(2)/h
+
+        tgt_img_scaled = F.interpolate(tgt_img, (h, w), mode='area')
+        ref_imgs_scaled = [F.interpolate(ref_img, (h, w), mode='area') for ref_img in ref_imgs]
+        intrinsics_scaled = torch.cat((self.intrinsics[:, 0:2]/downscale, self.intrinsics[:, 2:]), dim=1) #[B, 3, 3]
+
+        warped_imgs = []
+
+        for i, ref_img in enumerate(ref_imgs_scaled):
+            current_pose = poses_o[:, i] #[B, 6]
+
+            ref_img_warped, valid_points = inverse_warp(ref_img, depth_o[:,0], current_pose,
+                                                             intrinsics_scaled,
+                                                             rotation_mode='euler', padding_mode='zeros')
+
+            # (B, 3, h, w)
+
+            warped_imgs.append(ref_img_warped)
+            
+
+        return warped_imgs, depth_o, poses_o        
 
 
 if __name__ == "__main__":
     x = torch.tensor(
-        np.ones([1, 3, 480, 640]),
+        np.random.random_sample([8, 3, 480, 640]),
+        dtype=torch.float32
+    )
+
+    i = torch.tensor(
+        np.random.random_sample([8, 3, 3]),
         dtype=torch.float32
     )
 
     r = [x, x]
 
-    g = Generator()
-    o = g(x, r)
-    print(o[0].size())
-    print(o[1].size())
+    g = Generator(intrinsics=i)
+    w, d, p = g(x, r)
+    print(w[0].size())
+    
