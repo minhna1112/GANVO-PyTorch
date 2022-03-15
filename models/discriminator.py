@@ -5,19 +5,19 @@ def conv(in_planes, out_planes, kernel_size=3, padding=1):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, padding=padding),
         torch.nn.BatchNorm2d(num_features=out_planes),
-        torch.nn.ReLU(inplace=True)
+        torch.nn.ReLU(inplace=False)
     )
 
 def downsample_conv(in_planes, out_planes, kernel_size=3):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=2, padding=(kernel_size-1)//2),
         torch.nn.BatchNorm2d(num_features=out_planes),
-        torch.nn.LeakyReLU(inplace=True, negative_slope=0.02)
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02)
     )
 
 
 class Discriminator(torch.nn.Module):
-    def __init__(self, input_shape) -> None:
+    def __init__(self) -> None:
         """
             Five  Convolutional layers 
         """
@@ -32,10 +32,14 @@ class Discriminator(torch.nn.Module):
             torch.nn.Sigmoid()
         )
 
+    def compile(self, loss, optimizer):
+        self.loss = loss
+        self.optimizer = optimizer
+
     def forward(self, x):
         """
-        Input:  I_t or I^s: (3, h, w)
-        Output: Probability: (1,) 
+        Input:  I_t or I^s: (B, 3, h, w)
+        Output: Probability: (B, 1) 
         """
         x = self.conv1(x) #(6, h, w)
         x = self.conv2(x) #(128, h//2, w//2)
@@ -47,6 +51,24 @@ class Discriminator(torch.nn.Module):
         x = x.view(x.size(0), 1024) #[B, 1024]
         x = self.classfication_head(x) #[B, 1]        
         return x
+
+    def train_step(self, x, y):
+        """
+        Arguments: x: A tensor of shape [B, 3, H, W] if it is real target view
+                      A tensor of shape [2B, 3, H, W] if they are synthesize target view
+                    y: A all-one tensor of shape [B, 1] if it is real label
+                    : A all-zero tensor of shape [2B, 1] if it is fake label
+        """
+        y_hat = self.forward(x) # [B/2B, 1]
+        batch_loss = self.loss(y_hat, y)
+        batch_loss.backward()
+
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+
+        return batch_loss.item()
+
+
 
 if __name__ == "__main__":
     x = torch.tensor(

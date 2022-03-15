@@ -49,8 +49,8 @@ class Encoder(torch.nn.Module):
 
     def forward(self, x):
         """
-        Input: Target image I_t: (3, h, w)
-        Output: Target Feature maps: (512, h//32, w//32) 
+        Input: Target image I_t: (B, 3, h, w)
+        Output: Target Feature maps: (B, 512, h//32, w//32) 
         """
         x = self.conv1(x) #(32, h//2, w//2)
         x = self.conv2(x) #(64, h//4, w//4)
@@ -88,13 +88,13 @@ class Decoder(torch.nn.Module):
 
 
 class DepthGenerator(torch.nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self):
         """
         Encoder + Decoder
         """
         super(DepthGenerator, self).__init__()
-        self.h, self.w = input_shape[-2], input_shape[-1]
-        self.encoder = Encoder(input_shape[-3]) 
+        
+        self.encoder = Encoder(3) 
         self.decoder = Decoder()
 
         self.lconv = conv(512, 1024)
@@ -104,8 +104,8 @@ class DepthGenerator(torch.nn.Module):
 
     def forward(self, x):
         """
-        Input: Target view RGB (3, h, w)
-        Output: Target depth (1, h, w) range(-1,1)
+        Input: Target view RGB (B, 3, h, w)
+        Output: Target depth (B, 1, h, w) range(-1,1)
         """
         x = self.encoder(x) # (512, h//32, w//32)
         # x = x.mean(3).mean(2) # (512, 1, 1)
@@ -138,8 +138,8 @@ class PoseRegressor(torch.nn.Module):
     def forward(self, target_image, ref_imgs):
         """
         Input: Stacked tensor of [..., I_t-1, I_t, I_t+1.., ]
-                A tensor of shape (3*seq_length, h, w)
-        Output: Sequence of 6dof poses (seq_length-1, 6)
+                A tensor of shape (B, 3*seq_length, h, w)
+        Output: Sequence of 6dof poses (B, seq_length-1, 6)
         """
         assert(len(ref_imgs) == self.nb_ref_imgs)
         # input = [target_image]
@@ -157,16 +157,16 @@ class PoseRegressor(torch.nn.Module):
 
 
 class Generator(torch.nn.Module):
-    def __init__(self, intrinsics) -> None:
+    def __init__(self, seq_length=3) -> None:
         """
         Depth Generator  + Pose REgressor + View Reconstruction
         """
         super(Generator, self).__init__()
-        self.intrinsics = intrinsics
-        self.depth_generator = DepthGenerator([3, 480, 640])
-        self.pose_regressor = PoseRegressor(seq_length=3)
+        
+        self.depth_generator = DepthGenerator()
+        self.pose_regressor = PoseRegressor(seq_length=seq_length)
     
-    def forward(self, tgt_img, ref_imgs):
+    def forward(self, tgt_img, ref_imgs, intrinsics):
         depth_o = self.depth_generator(tgt_img) #[B, 1, H, W]
         poses_o = self.pose_regressor(tgt_img, ref_imgs) #[B, num_ref_imgs, 6]
 
@@ -175,7 +175,7 @@ class Generator(torch.nn.Module):
 
         tgt_img_scaled = F.interpolate(tgt_img, (h, w), mode='area')
         ref_imgs_scaled = [F.interpolate(ref_img, (h, w), mode='area') for ref_img in ref_imgs]
-        intrinsics_scaled = torch.cat((self.intrinsics[:, 0:2]/downscale, self.intrinsics[:, 2:]), dim=1) #[B, 3, 3]
+        intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1) #[B, 3, 3]
 
         warped_imgs = []
 
@@ -189,9 +189,8 @@ class Generator(torch.nn.Module):
             # (B, 3, h, w)
 
             warped_imgs.append(ref_img_warped)
-            
-
-        return warped_imgs, depth_o, poses_o        
+              
+        return warped_imgs, depth_o, poses_o 
 
 
 if __name__ == "__main__":
@@ -207,7 +206,7 @@ if __name__ == "__main__":
 
     r = [x, x]
 
-    g = Generator(intrinsics=i)
-    w, d, p = g(x, r)
+    g = Generator()
+    w, d, p = g(x, r, i)
     print(w[0].size())
     
