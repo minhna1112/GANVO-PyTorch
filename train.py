@@ -6,6 +6,8 @@ from path import Path
 import random
 import argparse
 from tqdm import tqdm
+from torchsummary import summary
+
 
 from datasets import custom_transforms
 from datasets.sequence_folders import SequenceFolder
@@ -62,7 +64,8 @@ def train():
                         help='momentum for sgd, alpha parameter for adam')
     parser.add_argument('--beta', default=0.999, type=float, metavar='M',
                         help='beta parameters for adam')    
-
+    parser.add_argument('--weight-decay', '--wd', default=0, type=float,
+                    metavar='W', help='weight decay')
 
     args = parser.parse_args()
 
@@ -96,17 +99,19 @@ def train():
     bce = torch.nn.BCELoss()
 
     #Optimizer
-    D_optmizer = torch.optim.Adam(  params={'params':ganvo.D.parameters(), 'lr': args.lr},
+    D_optmizer = torch.optim.Adam(  params=[{'params':ganvo.D.parameters(), 'lr': args.lr}],
                                     betas=(args.momentum, args.beta),
                                     weight_decay=args.weight_decay)
 
-    G_optmizer = torch.optim.Adam(  params={'params':ganvo.parameters(), 'lr': args.lr},
+    G_optmizer = torch.optim.Adam(  params=[{'params':ganvo.parameters(), 'lr': args.lr}],
                                     betas=(args.momentum, args.beta),
                                     weight_decay=args.weight_decay )
 
     # Keras-like Compilation
     ganvo.D.compile(loss=bce, optimizer = D_optmizer)
     ganvo.compile(loss=bce,   optimizer = G_optmizer) 
+
+    # summary(ganvo, input_size=[(3, 480, 640), (3, 480, 640), (3, 480, 640), (3,3)])
 
     #Training on a single Epoch
     for epoch in range(args.epochs):
@@ -115,3 +120,6 @@ def train():
             #  Training on a single batch
             d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
             
+
+if __name__=='__main__':
+    train()

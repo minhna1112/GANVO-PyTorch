@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from inverse_wrap import inverse_warp
+from .inverse_wrap import inverse_warp
 
 def downsample_conv(in_planes, out_planes, kernel_size=3):
     return torch.nn.Sequential(

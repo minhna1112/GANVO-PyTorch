@@ -2,8 +2,10 @@
 import torch
 import numpy
 
-from generator import Generator
-from discriminator import Discriminator
+from .generator import Generator
+from .discriminator import Discriminator
+
+from torchsummary import summary
 
 class GANVO(torch.nn.Module):
     def __init__(self, seq_length=3) -> None:
@@ -46,3 +48,6 @@ class GANVO(torch.nn.Module):
 
         return batch_loss.item()
     
+if __name__=='__main__':
+    ganvo = GANVO()
+    summary(ganvo, input_size=[(3, 480, 640), [(3, 480, 640), (3, 480, 640)], [3,3]])

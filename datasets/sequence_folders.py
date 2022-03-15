@@ -6,7 +6,7 @@ from path import Path
 import random
 
 import argparse
-import custom_transforms
+from . import custom_transforms
 
 from tqdm import tqdm
 
