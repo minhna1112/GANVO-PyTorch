@@ -48,15 +48,25 @@ def train():
                     help='path to dataset')
     parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
     parser.add_argument('--seed', default=0, type=int, help='seed for random functions, and network initialization')
+    
+    parser.add_argument('--epochs', default=200, type=int, metavar='N',
+                    help='number of total epochs to run')
     parser.add_argument('-b', '--batch-size', default=8, type=int,
                     metavar='N', help='mini-batch size')    
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers')
+    
+    parser.add_argument('--lr', '--learning-rate', default=2e-4, type=float,
+                    metavar='LR', help='initial learning rate')
+    parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
+                        help='momentum for sgd, alpha parameter for adam')
+    parser.add_argument('--beta', default=0.999, type=float, metavar='M',
+                        help='beta parameters for adam')    
 
 
     args = parser.parse_args()
 
-    # Data loading code
+    # Datasets
     normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],
                                             std=[0.5, 0.5, 0.5])
     train_transform = custom_transforms.Compose([
@@ -74,11 +84,34 @@ def train():
         sequence_length=args.sequence_length
     )
 
+    #Dataloader
     train_loader = torch.utils.data.DataLoader(
         train_set, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
 
+    #Network
     ganvo = GANVO(seq_length=args.sequence_length)
 
-    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
-        d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+    #Loss function
+    bce = torch.nn.BCELoss()
+
+    #Optimizer
+    D_optmizer = torch.optim.Adam(  params={'params':ganvo.D.parameters(), 'lr': args.lr},
+                                    betas=(args.momentum, args.beta),
+                                    weight_decay=args.weight_decay)
+
+    G_optmizer = torch.optim.Adam(  params={'params':ganvo.parameters(), 'lr': args.lr},
+                                    betas=(args.momentum, args.beta),
+                                    weight_decay=args.weight_decay )
+
+    # Keras-like Compilation
+    ganvo.D.compile(loss=bce, optimizer = D_optmizer)
+    ganvo.compile(loss=bce,   optimizer = G_optmizer) 
+
+    #Training on a single Epoch
+    for epoch in range(args.epochs):
+        
+        for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
+            #  Training on a single batch
+            d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+            
