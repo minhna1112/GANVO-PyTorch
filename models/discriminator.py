@@ -32,9 +32,10 @@ class Discriminator(torch.nn.Module):
             torch.nn.Sigmoid()
         )
 
-    def compile(self, loss, optimizer):
+    def compile(self, loss, optimizer, device):
         self.loss = loss
         self.optimizer = optimizer
+        self.to(device)
 
     def forward(self, x):
         """

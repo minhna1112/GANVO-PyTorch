@@ -16,9 +16,11 @@ class GANVO(torch.nn.Module):
         self.G = Generator(seq_length)
         self.D = Discriminator()
 
-    def compile(self, loss, optimizer):
+    def compile(self, loss, optimizer, device):
         self.loss = loss
         self.optimizer = optimizer
+        self.to(device)
+        self.device = device
 
     def forward(self, tgt_img, ref_imgs, intrinsics):
         """
@@ -39,6 +41,7 @@ class GANVO(torch.nn.Module):
         Arguments: 
                    y: A all-one tensor of shape [2B, 1] of fake labels
         """
+
         y_hat = self.forward(tgt_img, ref_imgs, intrinsics)
         batch_loss = self.loss(y_hat, y)
         batch_loss.backward()
