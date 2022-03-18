@@ -122,7 +122,10 @@ def train():
     ganvo.D.compile(loss=torch.nn.BCELoss(), optimizer = D_optmizer, device=device)
     ganvo.compile(loss=torch.nn.BCELoss(),   optimizer = G_optmizer, device=device) 
 
-    # summary(ganvo, input_size=[(3, 480, 640), (3, 480, 640), (3, 480, 640), (3,3)])
+    summary(ganvo.D, input_size=(3, 480, 640))
+    summary(ganvo.G.depth_generator, input_size=(3, 480, 640))
+    summary(ganvo.G.pose_regressor, input_size=(9, 480, 640))
+
 
     
     # ganvo = ganvo.to(device)
@@ -130,12 +133,12 @@ def train():
     # ganvo.G = torch.nn.DataParallel(ganvo.G)
     # ganvo.D = torch.nn.DataParallel(ganvo.D)
 
-    for epoch in range(args.epochs):
-        #Training on a single Epoch    
-        for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
-            #  Training on a single batch
+    # for epoch in range(args.epochs):
+    #     #Training on a single Epoch    
+    #     for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
+    #         #  Training on a single batch
 
-            d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+    #         d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
             
 
 if __name__=='__main__':
