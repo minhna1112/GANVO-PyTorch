@@ -15,10 +15,18 @@ from datasets.sequence_folders import SequenceFolder
 
 from models.gan import GANVO
 
+import torch.backends.cudnn as cudnn
+
+
 def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
     """
     Training GAN on a single batch
     """
+    tgt_img = tgt_img.to(gan.device)    
+    ref_imgs = [img.to(gan.device) for img in ref_imgs]
+    intrinsics = intrinsics.to(gan.device)
+    
+
     # Generate synthesized tgt views:
     warped_imgs, _, _ = gan.G(tgt_img, ref_imgs, intrinsics)
     warped_imgs = torch.cat(warped_imgs, 0)
@@ -29,8 +37,8 @@ def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
 
     # Creat labels:
     y_real = torch.cat([torch.ones(tgt_img.size(0), 1),
-                        torch.zeros(warped_imgs.size(0), 1)], dim=0)
-    y_fake = torch.ones(warped_imgs.size(0), 1)
+                        torch.zeros(warped_imgs.size(0), 1)], dim=0).to(gan.device)
+    y_fake = torch.ones(warped_imgs.size(0), 1).to(gan.device)
     
     # Train discriminator with truth labels
     gan.D.train(True)
@@ -68,6 +76,9 @@ def train():
                     metavar='W', help='weight decay')
 
     args = parser.parse_args()
+
+    # Configure device
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # Datasets
     normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],
@@ -108,17 +119,26 @@ def train():
                                     weight_decay=args.weight_decay )
 
     # Keras-like Compilation
-    ganvo.D.compile(loss=bce, optimizer = D_optmizer)
-    ganvo.compile(loss=bce,   optimizer = G_optmizer) 
+    ganvo.D.compile(loss=torch.nn.BCELoss(), optimizer = D_optmizer, device=device)
+    ganvo.compile(loss=torch.nn.BCELoss(),   optimizer = G_optmizer, device=device) 
 
-    # summary(ganvo, input_size=[(3, 480, 640), (3, 480, 640), (3, 480, 640), (3,3)])
+    summary(ganvo.D, input_size=(3, 480, 640))
+    summary(ganvo.G.depth_generator, input_size=(3, 480, 640))
+    summary(ganvo.G.pose_regressor, input_size=(9, 480, 640))
 
-    #Training on a single Epoch
-    for epoch in range(args.epochs):
-        
-        for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
-            #  Training on a single batch
-            d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+
+    
+    # ganvo = ganvo.to(device)
+    cudnn.benchmark = True
+    # ganvo.G = torch.nn.DataParallel(ganvo.G)
+    # ganvo.D = torch.nn.DataParallel(ganvo.D)
+
+    # for epoch in range(args.epochs):
+    #     #Training on a single Epoch    
+    #     for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
+    #         #  Training on a single batch
+
+    #         d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
             
 
 if __name__=='__main__':

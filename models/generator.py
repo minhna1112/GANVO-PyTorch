@@ -135,18 +135,18 @@ class PoseRegressor(torch.nn.Module):
             hidden_size=6
         )
     
-    def forward(self, target_image, ref_imgs):
+    def forward(self, input):
         """
         Input: Stacked tensor of [..., I_t-1, I_t, I_t+1.., ]
                 A tensor of shape (B, 3*seq_length, h, w)
         Output: Sequence of 6dof poses (B, seq_length-1, 6)
         """
-        assert(len(ref_imgs) == self.nb_ref_imgs)
+        # assert(len(ref_imgs) == self.nb_ref_imgs)
         # input = [target_image]
         # input.extend(ref_imgs)
         # input = torch.cat(input, 1)
-        input = ref_imgs[:self.nb_ref_imgs//2] + [target_image] + ref_imgs[self.nb_ref_imgs//2:]
-        input = torch.cat(input, 1) # (3*seq_length, h, w)
+        # input = ref_imgs[:self.nb_ref_imgs//2] + [target_image] + ref_imgs[self.nb_ref_imgs//2:]
+        # input = torch.cat(input, 1) # (3*seq_length, h, w)
         input = self.conv_encoder(input) # (512, h//32, w//32)
         input = input.mean(3).mean(2)  # (512, 1,  1) Global Average Pooling
         input = input.view(input.size(0), self.nb_ref_imgs, input.size(1)//self.nb_ref_imgs) # (2,  256)
@@ -167,8 +167,12 @@ class Generator(torch.nn.Module):
         self.pose_regressor = PoseRegressor(seq_length=seq_length)
     
     def forward(self, tgt_img, ref_imgs, intrinsics):
+        assert(len(ref_imgs) == self.pose_regressor.nb_ref_imgs)
+
         depth_o = self.depth_generator(tgt_img) #[B, 1, H, W]
-        poses_o = self.pose_regressor(tgt_img, ref_imgs) #[B, num_ref_imgs, 6]
+        poses_i = ref_imgs[:self.pose_regressor.nb_ref_imgs//2] + [tgt_img] + ref_imgs[self.pose_regressor.nb_ref_imgs//2:]
+        poses_i = torch.cat(poses_i, 1) # (B, 3*seq_length, h, w)
+        poses_o = self.pose_regressor(poses_i) #[B, num_ref_imgs, 6]
 
         b, _, h, w = depth_o.size()
         downscale = tgt_img.size(2)/h
