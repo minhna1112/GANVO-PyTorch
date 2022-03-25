@@ -2,6 +2,8 @@ from __future__ import division
 import torch
 import torch.nn.functional as F
 
+import numpy as np
+
 pixel_coords = None
 
 
@@ -68,6 +70,37 @@ def cam2pixel(cam_coords, proj_c2p_rot, proj_c2p_tr):
     pixel_coords = torch.stack([X_norm, Y_norm], dim=2)  # [B, H*W, 2]
     return pixel_coords.reshape(b, h, w, 2)
 
+def euler2quat(angle, is_radian=True):
+    """Convert euler angles to Quarternion.
+
+     Reference: https://github.com/pulkitag/pycaffe-utils/blob/master/rot_utils.py#L174
+
+    Args:
+        angle: rotation angle along 3 axis (in radians) -- size = [B, 3]
+    Returns:
+        Quarternion corresponding to the euler angles -- size = [B, 4]
+    """
+
+    
+    if not is_radian:
+        angle = (torch.pi / 180.) * angle
+	
+    angle = angle / 2.0
+
+    B = angle.size(0)
+    x, y, z = angle[:, 0], angle[:, 1], angle[:, 2]
+
+    cz = torch.cos(z)
+    sz = torch.sin(z)
+    cy = torch.cos(y)
+    sy = torch.sin(y)
+    cx = torch.cos(x)
+    sx = torch.sin(x)
+    return torch.stack([
+					 cx*cy*cz - sx*sy*sz,
+					 cx*sy*sz + cy*cz*sx,
+					 cx*cz*sy - sx*cy*sz,
+					 cx*cy*sz + sx*cz*sy], dim=1)
 
 def euler2mat(angle):
     """Convert euler angles to rotation matrix.
