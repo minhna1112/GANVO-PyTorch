@@ -1,10 +1,8 @@
 import rospy
 import rosbag
-
-import cv2
 import numpy as np
 
-
+import cv2
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
@@ -14,7 +12,7 @@ from tqdm import tqdm
 from path import Path
 import os
 
-from test_interpolation import sync_pose
+from pose_syncing import sync_pose
 
 
 class BagConverter(object):
@@ -46,12 +44,10 @@ class BagConverter(object):
         for i, (topic, msg, t) in enumerate(tqdm(image_generator)):
             im = self.bridge.imgmsg_to_cv2(msg, "bgr8")
             im_path = self.dst_folder / (str(i).zfill(6) + '.jpg')
+            # Append every timestamps that has an image message published
             self.valid_tstamps.append(t.to_sec())
-            # print(type(t.to_nsec()))
-            
-            # cv2.imwrite(im_path, im)
-
-        
+            print(type(t.to_nsec()))
+            cv2.imwrite(im_path, im)       
                 
 
     def quat2mat(self, w, x, y, z):
@@ -77,32 +73,37 @@ class BagConverter(object):
     def save_pose(self):
         pose_generator = self.bag.read_messages('/uav/odometry')
         print("Reading Poses  ......")
-        out = []
+        full_odom = []
         odom_ts = []
-        with open('./Timestamps_pose.txt', 'w') as f:
-            for i, (topic, msg, t) in enumerate(tqdm(pose_generator)):
-                px = float(msg.pose.pose.position.x) # float
-                py = float(msg.pose.pose.position.y)
-                pz = float(msg.pose.pose.position.z)
+       
+        for i, (topic, msg, t) in enumerate(tqdm(pose_generator)):
+            px = float(msg.pose.pose.position.x) # float
+            py = float(msg.pose.pose.position.y)
+            pz = float(msg.pose.pose.position.z)
 
-                ox = float(msg.pose.pose.orientation.x) # float
-                oy = float(msg.pose.pose.orientation.y)
-                oz = float(msg.pose.pose.orientation.z)
-                ow = float(msg.pose.pose.orientation.w)
+            ox = float(msg.pose.pose.orientation.x) # float
+            oy = float(msg.pose.pose.orientation.y)
+            oz = float(msg.pose.pose.orientation.z)
+            ow = float(msg.pose.pose.orientation.w)
 
-                t_vec = np.array([px,py,pz]).reshape([3,1]) # 3x1
-                rot_mat = self.quat2mat(ow, ox, oy, oz) # 3x3
-                T_mat = np.concatenate([rot_mat, t_vec], axis=1) # 3x4
-                out.append(T_mat.reshape([-1,12]))
-                odom_ts.append(t.to_sec())
-                f.write(f"Timestaps pose {t}\n")
-                
-        out = np.concatenate(out, axis=0)
-        odom_ts = np.array(odom_ts)
-        print("syncing poses")
-        final_poses = sync_pose(valid_timestamps=np.array(self.valid_tstamps), odom_timestamps=odom_ts, odom=out)
+            t_vec = np.array([px,py,pz]).reshape([3,1]) # 3x1 Translational vector
+            rot_mat = self.quat2mat(ow, ox, oy, oz) # 3x3 Rotation matrix
+            T_mat = np.concatenate([rot_mat, t_vec], axis=1) # 3x4 Transformation matrix
+            # Append the flattened Transformation (Pose vector) and the corresponding timestamps
+            full_odom.append(T_mat.reshape([-1,12])) 
+            odom_ts.append(t.to_sec())
+            
+        # Array with full number Gt Poses before syncing with images timestamps, save it for later comparison
+        full_odom = np.concatenate(full_odom, axis=0)  # [N , 12]
+        np.savetxt(self.dst_folder / 'poses_full.txt', full_odom)
         
-        np.savetxt(self.dst_folder / 'poses_new.txt', final_poses)
+        # Array of every timestamps that a Gt odometry message is published
+        odom_ts = np.array(odom_ts) # [N,]
+            
+        print("syncing poses ..... ")
+        # New Array with  GT Poses after syncing with images timestamps (Interpolated with neighbor GT poses)
+        final_poses = sync_pose(valid_timestamps=np.array(self.valid_tstamps), odom_timestamps=odom_ts, odom=full_odom) # [M, 12]
+        np.savetxt(self.dst_folder / 'poses.txt', final_poses)
 
 
 class BagDataReader(object):

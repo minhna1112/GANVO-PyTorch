@@ -1,21 +1,13 @@
-import time
 import numpy as np
 
-valid_timestamps = np.array(
-    range(0, 10, 1)
-) # (10,)
 
-
-
-odom_timestamps = np.linspace(0, 12, 23) #(23,)
-
-rd_odom = np.ones([len(odom_timestamps), 12]) * np.random.normal() #(23, 12)
 
 def find_nb_idx(valid_timestamps, odom_timestamps):
     """
     Args: valid_timestamps: array of timestamps in which an image message is published [M, ]
           odom_timestamps: array of timestamps in which an odometry message is published [N, ] N > M   
 
+    Return: [M, 2] Array of pairs of indices of neighbor timestamps w.r.t to every image timestamps 
     """
 
     time_diff = valid_timestamps[:, np.newaxis]-odom_timestamps[np.newaxis, :] # [M, N]
@@ -36,11 +28,12 @@ def find_nb_idx(valid_timestamps, odom_timestamps):
 def linear_interpolation(x, x0, x1, y0, y1):
     """
     Args: x: Array of valid timestamps from image topic [M,]
-          x0: Array of left neighbor timestamps [M, ]
-          x1: Array of right neighbor timestamps [M, ]
-          y0: Array of left neighbor poses [M, 12]
-          y1: Array of right neighbor poses [M, 12]
+          x0: Array of left-neighbor timestamps [M, ]
+          x1: Array of right-neighbor timestamps [M, ]
+          y0: Array of left-neighbor poses [M, 12]
+          y1: Array of right-neighbor poses [M, 12]
     Return: y: The interpolated pose [M, 12]
+    References: https://en.wikipedia.org/wiki/Linear_interpolation
     """
     
     y = np.zeros_like(y0) # [M, 12]
@@ -54,6 +47,14 @@ def linear_interpolation(x, x0, x1, y0, y1):
     return y # [M, 12]
 
 def sync_pose(valid_timestamps, odom_timestamps, odom):
+    """
+    Args: valid_timestamps: array of timestamps in which an image message is published [M, ]
+          odom_timestamps: array of timestamps in which an odometry message is published [N, ] N > M    
+          odom: Array of full groundtruth poses recorded from /uav/odometry topic [N, 12]
+
+    Return: [M, 12] New groundtruth after interpolation, has the same length with the number of image messages 
+    """
+
     neighbor_idx = find_nb_idx(valid_timestamps, odom_timestamps) # [M, 2]
     neighbor_timestamps = np.take_along_axis(odom_timestamps[:, np.newaxis], neighbor_idx, 0) # [N, 1] & [M, 2] -> [M, 2]
     neighbor_poses = odom[: , np.newaxis, :] # [N, 12] -> [N, 1, 12]
@@ -67,6 +68,12 @@ def sync_pose(valid_timestamps, odom_timestamps, odom):
     return synced_pose
 
 if __name__=='__main__':
+    valid_timestamps = np.array(
+        range(0, 10, 1)
+    ) # (10,)
 
+    odom_timestamps = np.linspace(0, 12, 23) #(23,)
+
+    rd_odom = np.ones([len(odom_timestamps), 12]) * np.random.normal() #(23, 12)
     print(sync_pose(valid_timestamps, odom_timestamps, rd_odom).shape)
 
