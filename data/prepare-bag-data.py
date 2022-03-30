@@ -13,6 +13,7 @@ from path import Path
 import os
 
 from pose_syncing import sync_pose
+import argparse
 
 
 class BagConverter(object):
@@ -46,7 +47,7 @@ class BagConverter(object):
             im_path = self.dst_folder / (str(i).zfill(6) + '.jpg')
             # Append every timestamps that has an image message published
             self.valid_tstamps.append(t.to_sec())
-            print(type(t.to_nsec()))
+            # print(type(t.to_nsec()))
             cv2.imwrite(im_path, im)       
                 
 
@@ -133,13 +134,16 @@ class BagDataReader(object):
         self.get_depth = get_depth
         self.get_pose = get_pose
 
+        if not os.path.exists(self.tgt_folder):
+            os.mkdir(self.tgt_folder)
+
     def collect_single_scene(self, scene_name):
         """
         Args: Scene name in scene list
         """
         bag_path = self.raw_folder / (scene_name + '.bag')
         dst_folder = self.tgt_folder / scene_name
-        if os.path.exists(dst_folder):
+        if not os.path.exists(dst_folder):
             os.mkdir(dst_folder)
 
         converter = BagConverter(bag_path, dst_folder)
@@ -153,15 +157,33 @@ class BagDataReader(object):
 
     def read_multiple_scenes(self):
         for scene_name in self.scene_names:
+            print("-------------------------------------------------------")
+            print(f"Processing Sequence {scene_name}")
             self.collect_single_scene(scene_name)
         
 
-def main(args):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--raw-dir", metavar='DIR', type=Path,
+                    help='path to original dataset')
+    parser.add_argument("--dst-dir", metavar='DIR', type=Path,
+                    help='path to the destination folder for saving converted data')
+    parser.add_argument("--with-depth", action='store_true',
+                        help="If available (e.g. with KITTI), will store depth ground truth along with images, for validation")
+    parser.add_argument("--with-pose", action='store_true',
+                        help="If available (e.g. with KITTI), will store pose ground truth along with images, for validation")
+    
+    args = parser.parse_args()
 
-    converter = BagConverter('/home/minh/data.bag', '/home/minh/a')
-    converter.save_intrinsics()
-    converter.save_rgb()
-    converter.save_pose()
+    reader = BagDataReader(
+        raw_folder=args.raw_dir,
+        tgt_folder=args.dst_dir,
+        get_depth=False,
+        get_pose=args.with_pose
+    )
+
+    reader.read_multiple_scenes()
+
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()

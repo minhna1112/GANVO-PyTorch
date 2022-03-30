@@ -19,10 +19,12 @@ def find_nb_idx(valid_timestamps, odom_timestamps):
     ref_time_diff = np.take_along_axis(time_diff, ref_idx, 1) # [M, 1]
     derived_idx[ref_time_diff>0] +=1 # [M, 1]
     derived_idx[ref_time_diff<0] -=1 # [M, 1]
+    derived_idx = np.clip(derived_idx, 0, len(ref_idx)-1)
 
     neighbor_idx = np.concatenate([ref_idx, derived_idx], axis=-1) # [M, 2]
     neighbor_idx = np.sort(neighbor_idx, axis=-1) # [M, 2]
 
+    
     return neighbor_idx
 
 def linear_interpolation(x, x0, x1, y0, y1):
