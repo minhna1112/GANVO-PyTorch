@@ -28,22 +28,37 @@ class GANVO(torch.nn.Module):
                    Image from source views: [I_t-1, I_t+1]
                    Intrinsics: Tensor of K matrices.
 
-        Out: 
+        Return: out: Synthesized  
         """
-        out, _, _ = self.G(tgt_img, ref_imgs, intrinsics) # [ [B, 3, H, W], [B, 3, H, W]]
-        out = torch.cat(out, 0)  # [2B, 3, H, W]
-        out = self.D(out) # [2B, 1]
+        ref_imgs_warped, valid_points, _, _ = self.G(tgt_img, ref_imgs, intrinsics) # [ [B, 3, H, W], [B, 3, H, W]]
+        ref_imgs_warped = torch.cat(ref_imgs_warped, 0)  # [2B, 3, H, W]
+        prob = self.D(ref_imgs_warped) # [2B, 1]
         
-        return out
+        return ref_imgs_warped, valid_points, prob
 
-    def train_step(self, tgt_img, ref_imgs, intrinsics, y):
+    def train_step(self, tgt_img, ref_imgs, intrinsics, fake_label):
         """
         Arguments: 
-                   y: A all-one tensor of shape [2B, 1] of fake labels
+                   
+                   tgt_img: original target view image with shape [B, 3, h, w]
+                   ref_imgs: Image from source views: [I_t-1, I_t+1]
+                   Intrinsics: Tensor of K matrices.]
+
+                   fake_label: A all-one tensor of shape [2B, 1] of fake labels
+        Return:    
+                   batch loss: Photometric loss + prob_loss with fake labels
         """
 
-        y_hat = self.forward(tgt_img, ref_imgs, intrinsics)
-        batch_loss = self.loss(y_hat, y)
+        # GAN forward pass (Discriminator is frozen)
+        ref_imgs_warped, valid_points, prob = self.forward(tgt_img, ref_imgs, intrinsics)
+
+        #Photometric loss
+        diff = (tgt_img.expand(ref_imgs_warped.size()) - ref_imgs_warped) * valid_points.unsqueeze(1).float()
+        reconstruction_loss = diff.mean()
+
+        # Probability loss
+        prob_loss = self.loss(prob, fake_label)
+        batch_loss = prob_loss + reconstruction_loss
         batch_loss.backward()
 
         self.optimizer.step()

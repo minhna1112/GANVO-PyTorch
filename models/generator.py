@@ -16,7 +16,7 @@ def predict_disp(in_planes):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, 1, kernel_size=3, padding=1),
         torch.nn.BatchNorm2d(num_features=1),
-        torch.nn.Tanh()
+        torch.nn.Sigmoid()
     )
 
 def conv(in_planes, out_planes, kernel_size=3, padding=1):
@@ -194,7 +194,7 @@ class Generator(torch.nn.Module):
 
             warped_imgs.append(ref_img_warped)
               
-        return warped_imgs, depth_o, poses_o 
+        return warped_imgs, valid_points, depth_o, poses_o 
 
 
 if __name__ == "__main__":

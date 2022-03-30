@@ -33,8 +33,6 @@ def photometric_reconstruction_loss(tgt_img, ref_imgs, intrinsics,
                                                         rotation_mode, padding_mode)
         diff = (tgt_img_scaled - ref_img_warped) * valid_points.unsqueeze(1).float()
 
-
-
         reconstruction_loss += diff.abs().mean()
         assert((reconstruction_loss == reconstruction_loss).item() == 1)
 
