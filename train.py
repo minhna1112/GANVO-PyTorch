@@ -28,7 +28,7 @@ def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
     
 
     # Generate synthesized tgt views:
-    warped_imgs, _, _ = gan.G(tgt_img, ref_imgs, intrinsics)
+    warped_imgs, _, _, _ = gan.G(tgt_img, ref_imgs, intrinsics)
     warped_imgs = torch.cat(warped_imgs, 0)
     #Generate input for Discriminator
     x_D = torch.cat([
@@ -118,12 +118,6 @@ def train(start=True):
     # Keras-like Compilation
     ganvo.D.compile(loss=torch.nn.BCELoss(), optimizer = D_optmizer, device=device)
     ganvo.compile(loss=torch.nn.BCELoss(),   optimizer = G_optmizer, device=device) 
-
-    summary(ganvo.D, input_size=(3, 480, 640))
-    summary(ganvo.G.depth_generator, input_size=(3, 480, 640))
-    summary(ganvo.G.pose_regressor, input_size=(9, 480, 640))
-
-
     
     cudnn.benchmark = True
     # ganvo.G = torch.nn.DataParallel(ganvo.G)
@@ -137,7 +131,11 @@ def train(start=True):
             for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
                 #  Training on a single batch
                 d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+    else:
+        summary(ganvo.D, input_size=(3, 480, 640))
+        summary(ganvo.G.depth_generator, input_size=(3, 480, 640))
+        summary(ganvo.G.pose_regressor, input_size=(9, 480, 640))
                 
 
 if __name__=='__main__':
-    train(start=False)
+    train(start=True)

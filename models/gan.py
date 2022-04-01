@@ -31,8 +31,8 @@ class GANVO(torch.nn.Module):
         Return: out: Synthesized  
         """
         ref_imgs_warped, valid_points, _, _ = self.G(tgt_img, ref_imgs, intrinsics) # [ [B, 3, H, W], [B, 3, H, W]]
-        ref_imgs_warped = torch.cat(ref_imgs_warped, 0)  # [2B, 3, H, W]
-        prob = self.D(ref_imgs_warped) # [2B, 1]
+        
+        prob = self.D(torch.cat(ref_imgs_warped, 0)) # [2B, 1]
         
         return ref_imgs_warped, valid_points, prob
 
@@ -49,12 +49,18 @@ class GANVO(torch.nn.Module):
                    batch loss: Photometric loss + prob_loss with fake labels
         """
 
+        warped_imgs = []
+        diff_maps = []
         # GAN forward pass (Discriminator is frozen)
         ref_imgs_warped, valid_points, prob = self.forward(tgt_img, ref_imgs, intrinsics)
 
         #Photometric loss
-        diff = (tgt_img.expand(ref_imgs_warped.size()) - ref_imgs_warped) * valid_points.unsqueeze(1).float()
-        reconstruction_loss = diff.mean()
+        reconstruction_loss = 0
+        for i, ref_img_warped in enumerate(ref_imgs_warped):
+            diff = (tgt_img  - ref_img_warped) * valid_points.unsqueeze(1).float()
+            reconstruction_loss += diff.abs().mean()
+            warped_imgs.append(ref_img_warped[0])
+            diff_maps.append(diff[0])
 
         # Probability loss
         prob_loss = self.loss(prob, fake_label)
@@ -64,8 +70,8 @@ class GANVO(torch.nn.Module):
         self.optimizer.step()
         self.optimizer.zero_grad()
 
-        return batch_loss.item()
-    
+        return batch_loss, reconstruction_loss, warped_imgs, diff_maps
+
 if __name__=='__main__':
     ganvo = GANVO()
     summary(ganvo, input_size=[(3, 480, 640), [(3, 480, 640), (3, 480, 640)], [3,3]])
