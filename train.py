@@ -16,7 +16,8 @@ from datasets.sequence_folders import SequenceFolder
 from models.gan import GANVO
 
 import torch.backends.cudnn as cudnn
-
+import cv2
+from logger import AverageMeter
 
 def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
     """
@@ -46,9 +47,9 @@ def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
     # Train GAN with fake labels
     gan.train(True)
     gan.D.train(False)
-    G_loss = gan.train_step(tgt_img, ref_imgs, intrinsics, y_fake)
+    G_batch_loss, reconstruction_loss, warped_imgs, diff_maps = gan.train_step(tgt_img, ref_imgs, intrinsics, y_fake)
 
-    return D_loss, G_loss
+    return D_loss, G_batch_loss, reconstruction_loss, warped_imgs, diff_maps
 
 def train(start=True):
     parser = argparse.ArgumentParser(description='GANVO training on KITTI-formatted Dataset',
@@ -128,14 +129,134 @@ def train(start=True):
         for epoch in range(args.epochs):
             print(f'epoch {epoch}')
             #Training on a single Epoch    
+            # running_D_loss = 0.0
+            # running_G_loss = 0.0
+            # running_GAN_loss = 0.0
             for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
                 #  Training on a single batch
-                d_loss, g_loss = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+                batch_size = tgt_img.size(0)
+                D_loss, G_batch_loss, reconstruction_loss, warped_imgs, diff_maps = train_on_batch(ganvo, tgt_img, ref_imgs, intrinsics)
+                # running_D_loss += D_loss.item() * batch_size * 3
+                # running_G_loss += reconstruction.item() * batch_size * 2
+                # running_GAN_loss += G_batch_loss.item() * batch_size * 2
+                if i%100 == 0 and i !=0 :
+                    print(f'D loss: {D_loss}, Reconstruction loss: {reconstruction_loss}, Gan loss: {G_batch_loss}')
+                    # cv2.imshow('Warped image', warped_imgs[0].detach().cpu().permute(1,2,0).numpy())
+                    print(tgt_img[0, 2, 100, 100])
+                    print(warped_imgs[0][2, 100, 100])
+                    
+            # running_D_loss /= 
     else:
         summary(ganvo.D, input_size=(3, 480, 640))
         summary(ganvo.G.depth_generator, input_size=(3, 480, 640))
         summary(ganvo.G.pose_regressor, input_size=(9, 480, 640))
-                
+
+
+
+@torch.no_grad()
+def validate_with_gt_pose(args, val_loader, disp_net, pose_exp_net, epoch, logger, tb_writer, sample_nb_to_log=3):
+    global device
+    batch_time = AverageMeter()
+    depth_error_names = ['abs_diff', 'abs_rel', 'sq_rel', 'a1', 'a2', 'a3']
+    depth_errors = AverageMeter(i=len(depth_error_names), precision=4)
+    # Absolute Trajectory and Relative Trajectory?
+    pose_error_names = ['ATE', 'RTE']
+    pose_errors = AverageMeter(i=2, precision=4)
+    log_outputs = sample_nb_to_log > 0
+    # Output the logs throughout the whole dataset
+    batches_to_log = list(np.linspace(0, len(val_loader), sample_nb_to_log).astype(int))
+    poses_values = np.zeros(((len(val_loader)-1) * args.batch_size * (args.sequence_length-1), 6))
+    disp_values = np.zeros(((len(val_loader)-1) * args.batch_size * 3))
+
+    # switch to evaluate mode
+    disp_net.eval()
+    pose_exp_net.eval()
+
+    end = time.time()
+    logger.valid_bar.update(0)
+    for i, (tgt_img, ref_imgs, gt_depth, gt_poses) in enumerate(val_loader):
+        tgt_img = tgt_img.to(device)
+        gt_depth = gt_depth.to(device)
+        gt_poses = gt_poses.to(device)
+        ref_imgs = [img.to(device) for img in ref_imgs]
+        b = tgt_img.shape[0]
+
+        # compute output
+        output_disp = disp_net(tgt_img)
+        output_depth = 1/output_disp
+        explainability_mask, output_poses = pose_exp_net(tgt_img, ref_imgs) #[B, num_seq-1, 6]
+
+        # [B, num_seq (num_ref_imgs+1), 6]
+        reordered_output_poses = torch.cat([output_poses[:, :gt_poses.shape[1]//2],
+                                            torch.zeros(b, 1, 6).to(output_poses),
+                                            output_poses[:, gt_poses.shape[1]//2:]], dim=1)
+
+        # pose_vec2mat only takes B, 6 tensors, so we simulate a batch dimension of B * seq_length
+        # [B * num_seq , 6]
+        unravelled_poses = reordered_output_poses.reshape(-1, 6)
+        # [B * num_seq , 12]
+        unravelled_matrices = pose_vec2mat(unravelled_poses, rotation_mode=args.rotation_mode)
+        # [B, num_seq, 3, 4] (T target to sources)
+        inv_transform_matrices = unravelled_matrices.reshape(b, -1, 3, 4)
+        # [B, num_seq, 3, 3] (R sources to target) (R^-1)
+        rot_matrices = inv_transform_matrices[..., :3].transpose(-2, -1)
+        # [B, num_seq, 3, 1] (translation sources to target) 
+        tr_vectors = -rot_matrices @ inv_transform_matrices[..., -1:]
+        # [B, num_seq, 3, 4] (T sources to target)
+        transform_matrices = torch.cat([rot_matrices, tr_vectors], axis=-1)
+        # [B, 1, 3, 4] (T target to first source ) 
+        first_inv_transform = inv_transform_matrices.reshape(b, -1, 3, 4)[:, :1]
+        # [B, num_seq, 3, 4] (T target -> first source) dot (All T sources -> target) = [Idenity, T2nd->1st, T3rd->1st, .... Ttarget->1st,.... Tnumseq->1st] ~ All odom wrt the first frame 
+        final_poses = first_inv_transform[..., :3] @ transform_matrices
+        final_poses[..., -1:] += first_inv_transform[..., -1:]
+        final_poses = final_poses.reshape(b, -1, 3, 4)
+
+        if log_outputs and i in batches_to_log:  # log first output of wanted batches
+            index = batches_to_log.index(i)
+            if epoch == 0:
+                for j, ref in enumerate(ref_imgs):
+                    tb_writer.add_image('val Input {}/{}'.format(j, index), tensor2array(tgt_img[0]), 0)
+                    tb_writer.add_image('val Input {}/{}'.format(j, index), tensor2array(ref[0]), 1)
+
+            log_output_tensorboard(tb_writer, 'val', index, '', epoch, output_depth, output_disp, None, None, explainability_mask)
+
+        if log_outputs and i < len(val_loader)-1:
+            step = args.batch_size*(args.sequence_length-1)
+            poses_values[i * step:(i+1) * step] = output_poses.cpu().view(-1, 6).numpy()
+            step = args.batch_size * 3
+            disp_unraveled = output_disp.cpu().view(args.batch_size, -1)
+            disp_values[i * step:(i+1) * step] = torch.cat([disp_unraveled.min(-1)[0],
+                                                            disp_unraveled.median(-1)[0],
+                                                            disp_unraveled.max(-1)[0]]).numpy()
+
+        depth_errors.update(compute_depth_errors(gt_depth, output_depth[:, 0]))
+        pose_errors.update(compute_pose_errors(gt_poses, final_poses))
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+        logger.valid_bar.update(i+1)
+        if i % args.print_freq == 0:
+            logger.valid_writer.write(
+                'valid: Time {} Abs Error {:.4f} ({:.4f}), ATE {:.4f} ({:.4f})'.format(batch_time,
+                                                                                       depth_errors.val[0],
+                                                                                       depth_errors.avg[0],
+                                                                                       pose_errors.val[0],
+                                                                                       pose_errors.avg[0]))
+    if log_outputs:
+        prefix = 'valid poses'
+        coeffs_names = ['tx', 'ty', 'tz']
+        if args.rotation_mode == 'euler':
+            coeffs_names.extend(['rx', 'ry', 'rz'])
+        elif args.rotation_mode == 'quat':
+            coeffs_names.extend(['qx', 'qy', 'qz'])
+        for i in range(poses_values.shape[1]):
+            tb_writer.add_histogram('{} {}'.format(prefix, coeffs_names[i]), poses_values[:, i], epoch)
+        tb_writer.add_histogram('disp_values', disp_values, epoch)
+    logger.valid_bar.update(len(val_loader))
+    return depth_errors.avg + pose_errors.avg, depth_error_names + pose_error_names
+
+
 
 if __name__=='__main__':
     train(start=True)
