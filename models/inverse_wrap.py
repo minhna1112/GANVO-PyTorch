@@ -72,7 +72,7 @@ def cam2pixel(cam_coords, proj_c2p_rot, proj_c2p_tr):
 
 def euler2quat(angle, is_radian=True):
     """Convert euler angles to Quarternion.
-
+     z, y, x => qw, qx, qy, qz
      Reference: https://github.com/pulkitag/pycaffe-utils/blob/master/rot_utils.py#L174
 
     Args:
@@ -96,11 +96,18 @@ def euler2quat(angle, is_radian=True):
     sy = torch.sin(y)
     cx = torch.cos(x)
     sx = torch.sin(x)
+
     return torch.stack([
-					 cx*cy*cz - sx*sy*sz,
-					 cx*sy*sz + cy*cz*sx,
-					 cx*cz*sy - sx*cy*sz,
-					 cx*cy*sz + sx*cz*sy], dim=1)
+					 cx*cy*cz + sx*sy*sz,
+					 sx*cy*cz - cx*sy*sz,
+					 cx*sy*cz + sx*cy*sz,
+					 cx*cy*sz - sx*sy*cz], dim=1)
+    
+    # return torch.stack([
+	# 				 cx*cy*cz - sx*sy*sz,
+	# 				 cx*sy*sz + cy*cz*sx,
+	# 				 cx*cz*sy - sx*cy*sz,
+	# 				 cx*cy*sz + sx*cz*sy], dim=1)
 
 def euler2mat(angle):
     """Convert euler angles to rotation matrix.

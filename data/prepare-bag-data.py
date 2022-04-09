@@ -53,8 +53,9 @@ class BagConverter(object):
 
     def quat2mat(self, w, x, y, z):
         """
-        Args:  4 quarternion coefficients
+        Args:  w,x,y,z: 4 quarternion coefficients
         Return: Corresponing 3x3 Rotation matrix 
+        https://en.wikipedia.org/wiki/Rotation_matrix#Quaternion
         """
         ww, wx, wy, wz = w*w, w*x, w*y, w*z
         xx, xy, xz = x*x, x*y, x*z
