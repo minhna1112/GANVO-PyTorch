@@ -26,6 +26,9 @@ def compute_pose_errors(gt, pred):
 def validate_with_pose_only(args, val_loader, pose_net, epoch, device):
     # switch to evaluate mode
     # disp_net.eval()
+    with open('./draft.txt', 'w') as f:
+        f.write('Epoch,ATE,RTE\n')
+
     pose_net.eval()
     for i, (tgt_img, ref_imgs, gt_poses) in enumerate(val_loader):
         tgt_img = tgt_img.to(device) #[B, 3, h, w]
@@ -64,4 +67,9 @@ def validate_with_pose_only(args, val_loader, pose_net, epoch, device):
         final_poses = final_poses.reshape(b, -1, 3, 4) #[B, num_seq, 3 , 4]
 
         ate, rte = compute_pose_errors(gt_poses, final_poses)
+        print(f"ATE: {ate}, RTE: {rte}")
+        with open('./draft.txt', 'a') as f:
+            f.write(f'{epoch}/{i},{ate},{rte}\n')
+    
+    return ate, rte
         

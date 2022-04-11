@@ -62,11 +62,11 @@ def train(start=True):
     parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
     parser.add_argument('--seed', default=0, type=int, help='seed for random functions, and network initialization')
     
-    parser.add_argument('--epochs', default=1, type=int, metavar='N',
+    parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
-    parser.add_argument('-b', '--batch-size', default=8, type=int,
+    parser.add_argument('-b', '--batch-size', default=16, type=int,
                     metavar='N', help='mini-batch size')    
-    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+    parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                     help='number of data loading workers')
     
     parser.add_argument('--lr', '--learning-rate', default=2e-4, type=float,
@@ -77,6 +77,9 @@ def train(start=True):
                         help='beta parameters for adam')    
     parser.add_argument('--weight-decay', '--wd', default=0, type=float,
                     metavar='W', help='weight decay')
+    parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
+                    help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
+
 
     args = parser.parse_args()
 
@@ -149,6 +152,7 @@ def train(start=True):
             # running_D_loss = 0.0
             # running_G_loss = 0.0
             # running_GAN_loss = 0.0
+            ganvo.train()
             for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
                 #  Training on a single batch
                 batch_size = tgt_img.size(0)
@@ -163,7 +167,6 @@ def train(start=True):
                     print(warped_imgs[0][2, 100, 100])
 
             ate, rte = validate_with_pose_only(args, val_loader, pose_net=ganvo.G.pose_regressor, epoch=epoch, device=device)        
-            print(f"ATE: {ate}, RTE: {rte}")
             # running_D_loss /= 
     else:
         summary(ganvo.D, input_size=(3, 480, 640))
