@@ -45,7 +45,7 @@ class SequenceFolder(data.Dataset):
             imgs = sorted(scene.files('*.jpg')) #List of filenames in each folder
             if len(imgs) < sequence_length:
                 continue
-            for i in range(demi_length, len(imgs)-demi_length): #(1, n-1)
+            for i in range(demi_length, len(imgs)-demi_length): #(1, n-1) or (2, n-2)
                 sample = {'intrinsics': intrinsics, 'tgt': imgs[i], 'ref_imgs': []}
                 for j in shifts: #im(i+1], im(i-1)
                     sample['ref_imgs'].append(imgs[i+j])
