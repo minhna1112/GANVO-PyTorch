@@ -5,7 +5,10 @@ from imageio import imread
 from path import Path
 import random
 import argparse
+from tqdm import tqdm
+
 import custom_transforms
+# from . import custom_transforms
 
 def crawl_folders(folders_list):
         imgs = []
@@ -207,7 +210,7 @@ class ValidationSetWithPoseOnly(data.Dataset):
     def __getitem__(self, index):
         sample = self.samples[index]
         tgt_img = load_as_float(sample['tgt'])
-        poses = sample['poses']
+        poses = sample['poses'] # [B, num_seq, 3, 4]
         ref_imgs = [load_as_float(ref_img) for ref_img in sample['ref_imgs']]
         if self.transform is not None:
             imgs, _ = self.transform([tgt_img] + ref_imgs, None)
@@ -250,3 +253,6 @@ if __name__=='__main__':
     val_loader = torch.utils.data.DataLoader(
         val_set, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
+
+    for i, (tgt_img, ref_imgs, gt_poses) in enumerate(tqdm(val_loader)):
+        print(gt_poses.shape)

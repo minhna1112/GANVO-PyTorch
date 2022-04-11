@@ -31,11 +31,12 @@ class SequenceFolder(data.Dataset):
         random.seed(seed)
         self.root = Path(root)
         scene_list_path = self.root/'train.txt' if train else self.root/'val.txt'
-        self.scenes = [self.root/folder[:-1] for folder in open(scene_list_path)]
+        self.scenes = [self.root/folder[:-1] for folder in open(scene_list_path, newline='\n', mode='r')]
         self.transform = transform
         self.crawl_folders(sequence_length)
 
     def crawl_folders(self, sequence_length):
+        print(self.scenes)
         sequence_set = []
         demi_length = (sequence_length-1)//2  #1
         shifts = list(range(-demi_length, demi_length + 1)) #[-1, 0, 1]
@@ -109,5 +110,3 @@ if __name__=="__main__":
 
     for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(train_loader)):
         continue
-
-    # valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(), normalize])
