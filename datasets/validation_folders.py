@@ -191,7 +191,7 @@ class ValidationSetWithPoseOnly(data.Dataset):
             for i in range(demi_length, len(imgs)-demi_length):
                 # Take the middle image as target view
                 tgt_img = imgs[i]
-                sample = {'intrinsics': intrinsics, 'tgt': tgt_img, 'ref_imgs': [], 'poses': [], 'depth': d}
+                sample = {'intrinsics': intrinsics, 'tgt': tgt_img, 'ref_imgs': [], 'poses': []}
                 # First pose of each sample (Odometry) (RElative to first frame of trajectory)
                 first_pose = poses_4D[i - demi_length] # aka First pose, [1,4,4]
                 # Convert every odometry in the seqence to "First frame of sequence" view
@@ -230,7 +230,12 @@ if __name__=='__main__':
     parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
     parser.add_argument('--seed', default=0, type=int, help='seed for random functions, and network initialization')
     parser.add_argument('-b', '--batch-size', default=8, type=int,
-                    metavar='N', help='mini-batch size')    
+                    metavar='N', help='mini-batch size') 
+    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                    help='number of data loading workers')   
+    
+    normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                            std=[0.5, 0.5, 0.5])
     valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(), normalize])
 
     args = parser.parse_args()
@@ -239,7 +244,6 @@ if __name__=='__main__':
         args.data,
         transform=valid_transform,
         seed=args.seed,
-        train=False,
         sequence_length=args.sequence_length
     )
     #Dataloader
