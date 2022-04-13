@@ -7,8 +7,8 @@ import random
 import argparse
 from tqdm import tqdm
 
-import custom_transforms
-# from . import custom_transforms
+# import custom_transforms
+from . import custom_transforms
 
 def crawl_folders(folders_list):
         imgs = []

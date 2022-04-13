@@ -79,7 +79,7 @@ def train(start=True):
                     metavar='W', help='weight decay')
     parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
                     help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
-    parser.add_argument('--init-mode', type=str, choices=['kaiming_uniform', 'kaiming_normal', 'xavier_uniform', 'xavier_normal'], default='kaiming_uniform',
+    parser.add_argument('--init-mode', type=str, choices=['kaiming_uniform', 'kaiming_normal', 'xavier_uniform', 'xavier_normal', 'gaussian'], default='kaiming_uniform',
                     help='Weight initialization: kaiming or xavier, uniform or normal')
 
 

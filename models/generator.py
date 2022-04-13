@@ -7,9 +7,9 @@ from .inverse_wrap import inverse_warp
 def downsample_conv(in_planes, out_planes, kernel_size=3):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=2, padding=(kernel_size-1)//2),
-        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02),
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.2),
         torch.nn.Conv2d(out_planes, out_planes, kernel_size=kernel_size, padding=(kernel_size-1)//2),
-        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02)
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.2)
     )
 
 def predict_disp(in_planes):
@@ -30,7 +30,7 @@ def upconv(in_planes, out_planes):
     return torch.nn.Sequential(
         torch.nn.ConvTranspose2d(in_planes, out_planes, kernel_size=3, stride=2, padding=1, output_padding=1),
         torch.nn.BatchNorm2d(num_features=out_planes),
-        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02)
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.2)
     )
 
 class Encoder(torch.nn.Module):
@@ -170,14 +170,16 @@ class Generator(torch.nn.Module):
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.ConvTranspose2d):
                 if init_mode == 'kaiming_uniform':
-                    torch.nn.init.kaiming_uniform_(m.weight.data, a=0.02)
+                    torch.nn.init.kaiming_uniform_(m.weight.data, a=0.2)
                 elif init_mode == 'kaiming_normal':
-                    torch.nn.init.kaiming_normal_(m.weight.data, a=0.02)
+                    torch.nn.init.kaiming_normal_(m.weight.data, a=0.2)
                 elif init_mode == 'xavier_uniform':
-                    torch.nn.init.xavier_uniform_(m.weight.data)
+                    torch.nn.init.xavier_uniform_(m.weight.data, gain=torch.nn.init.calculate_gain('leaky_relu'))
                 elif init_mode == 'xavier_normal':
-                    torch.nn.init.xavier_normal_(m.weight.data)
-                
+                    torch.nn.init.xavier_normal_(m.weight.data, gain=torch.nn.init.calculate_gain('leaky_relu'))
+                elif init_mode == 'gaussian':
+                    torch.nn.init.normal_(m.weight.data, std=0.02)
+
                 if m.bias is not None:
                     torch.nn.init.zeros_(m.bias)
     
