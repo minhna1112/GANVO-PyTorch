@@ -7,9 +7,9 @@ from .inverse_wrap import inverse_warp
 def downsample_conv(in_planes, out_planes, kernel_size=3):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=2, padding=(kernel_size-1)//2),
-        torch.nn.ReLU(inplace=True),
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02),
         torch.nn.Conv2d(out_planes, out_planes, kernel_size=kernel_size, padding=(kernel_size-1)//2),
-        torch.nn.ReLU(inplace=True)
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02)
     )
 
 def predict_disp(in_planes):
@@ -30,7 +30,7 @@ def upconv(in_planes, out_planes):
     return torch.nn.Sequential(
         torch.nn.ConvTranspose2d(in_planes, out_planes, kernel_size=3, stride=2, padding=1, output_padding=1),
         torch.nn.BatchNorm2d(num_features=out_planes),
-        torch.nn.ReLU(inplace=True)
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02)
     )
 
 class Encoder(torch.nn.Module):
@@ -165,6 +165,21 @@ class Generator(torch.nn.Module):
         
         self.depth_generator = DepthGenerator()
         self.pose_regressor = PoseRegressor(seq_length=seq_length)
+
+    def init_weights(self, init_mode='kaiming_uniform'):
+        for m in self.modules():
+            if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.ConvTranspose2d):
+                if init_mode == 'kaiming_uniform':
+                    torch.nn.init.kaiming_uniform_(m.weight.data, a=0.02)
+                elif init_mode == 'kaiming_normal':
+                    torch.nn.init.kaiming_normal_(m.weight.data, a=0.02)
+                elif init_mode == 'xavier_uniform':
+                    torch.nn.init.xavier_uniform_(m.weight.data)
+                elif init_mode == 'xavier_normal':
+                    torch.nn.init.xavier_normal_(m.weight.data)
+                
+                if m.bias is not None:
+                    torch.nn.init.zeros_(m.bias)
     
     def forward(self, tgt_img, ref_imgs, intrinsics):
         assert(len(ref_imgs) == self.pose_regressor.nb_ref_imgs)

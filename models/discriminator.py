@@ -5,7 +5,7 @@ def conv(in_planes, out_planes, kernel_size=3, padding=1):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, padding=padding),
         torch.nn.BatchNorm2d(num_features=out_planes),
-        torch.nn.ReLU(inplace=False)
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.02)
     )
 
 def downsample_conv(in_planes, out_planes, kernel_size=3):
