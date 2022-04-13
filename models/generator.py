@@ -2,7 +2,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .inverse_wrap import inverse_warp
+# from .inverse_wrap import inverse_warp
+
+from inverse_wrap import inverse_warp
+from torchsummary import summary
+
 
 def downsample_conv(in_planes, out_planes, kernel_size=3):
     return torch.nn.Sequential(
@@ -23,7 +27,7 @@ def conv(in_planes, out_planes, kernel_size=3, padding=1):
     return torch.nn.Sequential(
         torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, padding=padding),
         torch.nn.BatchNorm2d(num_features=out_planes),
-        torch.nn.Tanh()
+        torch.nn.LeakyReLU(inplace=False, negative_slope=0.2)
     )
 
 def upconv(in_planes, out_planes):
@@ -31,6 +35,13 @@ def upconv(in_planes, out_planes):
         torch.nn.ConvTranspose2d(in_planes, out_planes, kernel_size=3, stride=2, padding=1, output_padding=1),
         torch.nn.BatchNorm2d(num_features=out_planes),
         torch.nn.LeakyReLU(inplace=False, negative_slope=0.2)
+    )
+
+def reconstruction_head(in_planes):
+    return torch.nn.Sequential(
+        torch.nn.Conv2d(in_planes, 3, kernel_size=3, padding=1),
+        torch.nn.BatchNorm2d(num_features=3),
+        torch.nn.Tanh()
     )
 
 class Encoder(torch.nn.Module):
@@ -73,46 +84,62 @@ class Decoder(torch.nn.Module):
         self.conv2 = upconv(in_planes=512, out_planes=256)
         self.conv3 = upconv(in_planes=256, out_planes=128)
         self.conv4 = upconv(in_planes=128, out_planes=64)
-        self.conv5 = predict_disp(in_planes=64)
+        # self.conv5 = predict_disp(in_planes=64)
         
     def forward(self, x):
         x = self.conv0(x) # (1024, h//16, w//16)
-        x = self.conv1(x) #(512, h//8, w//8)
-        x = self.conv2(x) #(256, h//4, w//4)
-        x = self.conv3(x) #(128, h//2, w//2)
-        x = self.conv4(x) #(64, h, w)
-        x = self.conv5(x) #(1, h, w)
+        x = self.conv1(x) # (512, h//8, w//8)
+        x = self.conv2(x) # (256, h//4, w//4)
+        x = self.conv3(x) # (128, h//2, w//2)
+        x = self.conv4(x) # (64, h, w)
+        # x = self.conv5(x) # (1, h, w)
 
         return x
         
+class VAE(torch.nn.Module):
+    def __init__(self) -> None:
+        super(VAE, self).__init__()
+        self.encoder = Encoder(3)
+        self.decoder = Decoder()
+        self.lconv = conv(512, 1024)
+        self.head = reconstruction_head(in_planes=64)
 
+    def forward(self, x):
+        x = self.encoder(x) # (512, h//32, w//32)
+        # x = x.mean(3).mean(2) # (512, 1, 1)
+        x = self.lconv(x) # (1024, h//32, w//32)
+        x = self.decoder(x) # (64, h, w)        
+        x = self.head(x) # (3, h, w)
+
+        return x
 
 class DepthGenerator(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, *args):
         """
         Encoder + Decoder
         """
         super(DepthGenerator, self).__init__()
+        if len(args) >0:
+            if isinstance(args[0], torch.nn.Module):
+                """
+                Initialize from a pre-trained VAE
+                """
+                self.vae = args[0]
+                self.vae.head = predict_disp(64)
+        else:
+            self.vae = torch.nn.Sequential(
+                Encoder(3),
+                conv(512, 1024),
+                Decoder(),
+                predict_disp(in_planes=64)
+            )
         
-        self.encoder = Encoder(3) 
-        self.decoder = Decoder()
-
-        self.lconv = conv(512, 1024)
-
-        # self.lconv1 = conv(512, 100, 1, 0)
-        # self.lconv2 = conv(100, 100, 1, 0)
-
     def forward(self, x):
         """
         Input: Target view RGB (B, 3, h, w)
-        Output: Target depth (B, 1, h, w) range(-1,1)
+        Output: Target depth (B, 1, h, w) range(0,1)
         """
-        x = self.encoder(x) # (512, h//32, w//32)
-        # x = x.mean(3).mean(2) # (512, 1, 1)
-        x = self.lconv(x) # (1024, h//32, w//32)
-        x = self.decoder(x) # (1, h, w)
-
-        return x
+        return self.vae(x) # (64, h, w)
 
 
 class PoseRegressor(torch.nn.Module):
@@ -215,19 +242,16 @@ class Generator(torch.nn.Module):
 
 
 if __name__ == "__main__":
-    x = torch.tensor(
-        np.random.random_sample([8, 3, 480, 640]),
-        dtype=torch.float32
-    )
-
-    i = torch.tensor(
-        np.random.random_sample([8, 3, 3]),
-        dtype=torch.float32
-    )
-
-    r = [x, x]
-
-    g = Generator()
-    w, d, p = g(x, r, i)
-    print(w[0].size())
-    
+    pretrained_vae = VAE()
+    # depth_net_1 = DepthGenerator()
+    depth_net_2 = DepthGenerator(pretrained_vae)
+    # summary(depth_net, input_size=(3, 480, 640))
+    # print(pretrained_vae.state_dict().keys())
+    # summary(pretrained_vae, input_size=(3, 480, 640))
+    # summary(depth_net_1, input_size=(3, 480, 640))
+    # summary(depth_net_2, input_size=(3, 480, 640))
+    generator = Generator()
+    print(generator.state_dict())
+    generator.depth_generator = depth_net_2
+    print(generator.state_dict())
+    # print(depth_net.head)
