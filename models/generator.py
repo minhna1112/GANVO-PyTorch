@@ -2,9 +2,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-# from .inverse_wrap import inverse_warp
+from .inverse_wrap import inverse_warp
 
-from inverse_wrap import inverse_warp
+# from inverse_wrap import inverse_warp
 from torchsummary import summary
 
 
