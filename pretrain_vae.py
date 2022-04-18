@@ -58,6 +58,7 @@ class VaeTrainer:
     def compile(self, loss, optimizer, device):
         self.loss = loss
         self.optimizer = optimizer
+        self.device = device
         self.model.to(device)
 
     def train_step(self, x, y):
@@ -82,6 +83,7 @@ class VaeTrainer:
             for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(tqdm(self.train_loader)):
                 #  Training on a single batch
                 batch_size = tgt_img.size(0)
+                tgt_img = tgt_img.to(self.device)
                 reconstruction_loss, generated_img = self.train_step(tgt_img, tgt_img)
                 if i%100 == 0 and i !=0 :
                     print(f'Reconstruction loss: {reconstruction_loss}')
@@ -137,7 +139,7 @@ def main(args):
 
     #Train and save model
     trainer.train(args.epochs)
-    trainer.save_model('~/pretrained_vae.pt')    
+    trainer.save_model('../pretrained_vae.pt')    
 
     return
 

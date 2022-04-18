@@ -256,3 +256,6 @@ if __name__ == "__main__":
     generator.depth_generator = depth_net_2
     print(generator.state_dict())
     # print(depth_net.head)
+    x = torch.zeros(4, 3, 128, 320)
+    y = depth_net_2(x)
+    print(y.size())

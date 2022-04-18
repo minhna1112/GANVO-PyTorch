@@ -14,6 +14,7 @@ from datasets.sequence_folders import SequenceFolder
 from datasets.validation_folders import ValidationSetWithPoseOnly
 
 from models.gan import GANVO
+from models.generator import DepthGenerator, VAE
 
 from evaluate import validate_with_pose_only
 
@@ -79,7 +80,7 @@ def train(start=True):
                     metavar='W', help='weight decay')
     parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
                     help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
-    parser.add_argument('--init-mode', type=str, choices=['kaiming_uniform', 'kaiming_normal', 'xavier_uniform', 'xavier_normal', 'gaussian'], default='kaiming_uniform',
+    parser.add_argument('--init-mode', type=str, choices=['kaiming_uniform', 'kaiming_normal', 'xavier_uniform', 'xavier_normal', 'gaussian', 'pretrained'], default='kaiming_uniform',
                     help='Weight initialization: kaiming or xavier, uniform or normal')
 
 
@@ -128,7 +129,16 @@ def train(start=True):
 
     #Network
     ganvo = GANVO(seq_length=args.sequence_length)
-
+    
+    if args.init_mode == 'pretrained':
+        print("Loading  pretraine for depth generator")
+        vae = VAE()
+        vae.load_state_dict(torch.load('../pretrained_vae.pt'))
+        print("Done")
+        ganvo.G.depth_generator = DepthGenerator(vae)
+    else:
+        ganvo.G.init_weights(args.init_mode)
+    
     #Optimizer
     D_optmizer = torch.optim.Adam(  params=[{'params':ganvo.D.parameters(), 'lr': args.lr}],
                                     betas=(args.momentum, args.beta),
@@ -141,8 +151,6 @@ def train(start=True):
     # Keras-like Compilation
     ganvo.D.compile(loss=torch.nn.BCELoss(), optimizer = D_optmizer, device=device)
     ganvo.compile(loss=torch.nn.BCELoss(),   optimizer = G_optmizer, device=device)
-
-    ganvo.G.init_weights(args.init_mode)
     
     cudnn.benchmark = True
     # ganvo.G = torch.nn.DataParallel(ganvo.G)
