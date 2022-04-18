@@ -213,7 +213,8 @@ class Generator(torch.nn.Module):
     def forward(self, tgt_img, ref_imgs, intrinsics):
         assert(len(ref_imgs) == self.pose_regressor.nb_ref_imgs)
 
-        depth_o = self.depth_generator(tgt_img) #[B, 1, H, W]
+        disparity_o = self.depth_generator(tgt_img) #[B, 1, H, W]
+        depth_o = 1 / disparity_o #[B, 1, H, W]
         poses_i = ref_imgs[:self.pose_regressor.nb_ref_imgs//2] + [tgt_img] + ref_imgs[self.pose_regressor.nb_ref_imgs//2:]
         poses_i = torch.cat(poses_i, 1) # (B, 3*seq_length, h, w)
         poses_o = self.pose_regressor(poses_i) #[B, num_ref_imgs, 6]
