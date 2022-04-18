@@ -58,6 +58,8 @@ class GANVO(torch.nn.Module):
         reconstruction_loss = 0
         for i, ref_img_warped in enumerate(ref_imgs_warped):
             diff = (tgt_img  - ref_img_warped) * valid_points.unsqueeze(1).float()
+            # diff = (tgt_img  - ref_img_warped)
+            
             reconstruction_loss += diff.abs().mean()
             warped_imgs.append(ref_img_warped[0])
             diff_maps.append(diff[0])
