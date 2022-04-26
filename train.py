@@ -21,6 +21,7 @@ from evaluate import validate_with_pose_only
 import torch.backends.cudnn as cudnn
 import cv2
 from utils import save_checkpoint, save_path_formatter
+from tensorboardX import SummaryWriter
 # from logger import AverageMeter
 
 def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
@@ -86,12 +87,13 @@ def train(start=True):
 
 
     args = parser.parse_args()
-    #saves checkpoint
+    #saves checkpoints
     save_path = save_path_formatter(args, parser)
     args.save_path = 'checkpoints' / save_path
     print('=> will save everything to {}'.format(args.save_path))
     args.save_path.makedirs_p()
 
+    tb_writer = SummaryWriter(args.save_path)
     # Configure device
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -183,9 +185,15 @@ def train(start=True):
                     # cv2.imshow('Warped image', warped_imgs[0].detach().cpu().permute(1,2,0).numpy())
                     print(tgt_img[0, 2, 100, 100])
                     print(warped_imgs[0][2, 100, 100])
-
-            ate, rte = validate_with_pose_only(args, val_loader, pose_net=ganvo.G.pose_regressor, epoch=epoch, device=device)        
-            # running_D_loss /= 
+            #tensorboard losses
+            tb_writer.add_scalar('D_loss', D_loss, epoch)
+            tb_writer.add_scalar('G_batch_loss', G_batch_loss_loss, epoch)
+            tb_writer.add_scalar('Reconstruction_loss', reconstruction_loss, epoch)
+            ate, rte = validate_with_pose_only(args, val_loader, pose_net=ganvo.G.pose_regressor, epoch=epoch, device=device)
+            #tensorboard ate/rte
+            tb_writer.add_scalar('ATE', ate, epoch)
+            tb_writer.add_scalar('RTE', rte, epoch)
+            # running_D_loss /=
     else:
         summary(ganvo.D, input_size=(3, 480, 640))
         summary(ganvo.G.depth_generator, input_size=(3, 480, 640))
