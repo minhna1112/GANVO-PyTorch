@@ -20,6 +20,7 @@ from evaluate import validate_with_pose_only
 
 import torch.backends.cudnn as cudnn
 import cv2
+from utils import save_checkpoint, save_path_formatter
 # from logger import AverageMeter
 
 def train_on_batch(gan: GANVO, tgt_img, ref_imgs, intrinsics):
@@ -85,6 +86,11 @@ def train(start=True):
 
 
     args = parser.parse_args()
+    #saves checkpoint
+    save_path = save_path_formatter(args, parser)
+    args.save_path = 'checkpoints' / save_path
+    print('=> will save everything to {}'.format(args.save_path))
+    args.save_path.makedirs_p()
 
     # Configure device
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
