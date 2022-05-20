@@ -187,7 +187,7 @@ def train(start=True):
                     print(warped_imgs[0][2, 100, 100])
             #tensorboard losses
             tb_writer.add_scalar('D_loss', D_loss, epoch)
-            tb_writer.add_scalar('G_batch_loss', G_batch_loss_loss, epoch)
+            tb_writer.add_scalar('G_batch_loss', G_batch_loss, epoch)
             tb_writer.add_scalar('Reconstruction_loss', reconstruction_loss, epoch)
             ate, rte = validate_with_pose_only(args, val_loader, pose_net=ganvo.G.pose_regressor, epoch=epoch, device=device)
             #tensorboard ate/rte
