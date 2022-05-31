@@ -42,20 +42,20 @@ def photometric_reconstruction_loss(tgt_img, ref_imgs, intrinsics,
     return reconstruction_loss, warped_imgs, diff_maps
 
 #reading the pytorch tutorial, reading GAN...
-def gan_optimize(netG, netD):
-    #create D and G
-    netG = Generator(ngpu).to(device)
-    netD = Discriminator(ngpu).to(device)
-    # Initialize BCELoss function
-    criterion = nn.BCELoss()
-
-    # Create batch of latent vectors that we will use to visualize
-    #  the progression of the generator
-    fixed_noise = torch.randn(64, nz, 1, 1, device=device)
-    #setup Adam optimizers for both G and D
-    optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
-    optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
-    return
+# def gan_optimize(netG, netD):
+#     #create D and G
+#     netG = Generator(ngpu).to(device)
+#     netD = Discriminator(ngpu).to(device)
+#     # Initialize BCELoss function
+#     criterion = nn.BCELoss()
+#
+#     # Create batch of latent vectors that we will use to visualize
+#     #  the progression of the generator
+#     fixed_noise = torch.randn(64, nz, 1, 1, device=device)
+#     #setup Adam optimizers for both G and D
+#     optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
+#     optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
+#     return
 
 
 #sfmlearner
