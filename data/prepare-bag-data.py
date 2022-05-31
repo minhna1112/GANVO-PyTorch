@@ -14,6 +14,7 @@ import os
 
 from pose_syncing import sync_pose
 import argparse
+import matplotlib.pyplot as plt
 
 
 class BagConverter(object):
@@ -38,7 +39,7 @@ class BagConverter(object):
 
     def save_rgb(self):
         self.bag.read_messages()
-        image_generator = self.bag.read_messages(topics='/uav/camera/left_rgb_blurred/image_rect_color')
+        image_generator = self.bag.read_messages(topics='/rgb')
         print("Reading Images  ......")
         
   
@@ -50,8 +51,8 @@ class BagConverter(object):
             # print(type(t.to_nsec()))
             cv2.imwrite(im_path, im)       
                 
-
-    def quat2mat(self, w, x, y, z):
+    @staticmethod
+    def quat2mat(w, x, y, z):
         """
         Args:  w,x,y,z: 4 quarternion coefficients
         Return: Corresponing 3x3 Rotation matrix 
@@ -73,7 +74,7 @@ class BagConverter(object):
         return R
 
     def save_pose(self):
-        pose_generator = self.bag.read_messages('/uav/odometry')
+        pose_generator = self.bag.read_messages('/hummingbird/ground_truth/pose_with_covariance')
         print("Reading Poses  ......")
         full_odom = []
         odom_ts = []
@@ -106,6 +107,36 @@ class BagConverter(object):
         # New Array with  GT Poses after syncing with images timestamps (Interpolated with neighbor GT poses)
         final_poses = sync_pose(valid_timestamps=np.array(self.valid_tstamps), odom_timestamps=odom_ts, odom=full_odom) # [M, 12]
         np.savetxt(self.dst_folder / 'poses.txt', final_poses)
+
+    def save_depth(self):
+        
+        # image_generator = self.bag.read_messages(topics='/airsim_node/PX4/camera_1/DepthPlanar')
+        image_generator = self.bag.read_messages(topics='/depth')
+        print("Reading Depth Images  ......")
+     
+        for i, (topic, msg, t) in enumerate(tqdm(image_generator)):
+
+            h, w = msg.height, msg.width
+            dtype = np.dtype("float32") 
+            # Depth message from Flightmare is encoded as 32FC1
+            print(len(msg.data))
+            im = np.ndarray(shape=(h, w),
+                           dtype=dtype, buffer=msg.data)  
+            print(im.max())
+            out = np.copy(im)
+            # out.setflags(write=1)
+            # out = out / 1000.
+            # Clip depth values that exceesds 100 (m)
+            # out[im>=100] = 100
+            # Save to binary file
+            depth_path = self.dst_folder / (str(i).zfill(6) + '.npy')
+            # np.save(depth_path, out)
+
+            if i == 550:
+                plt.imshow(out, 'gray')
+                plt.show()
+                print(out.max())
+                break
 
 
 class BagDataReader(object):
@@ -148,7 +179,7 @@ class BagDataReader(object):
             os.mkdir(dst_folder)
 
         converter = BagConverter(bag_path, dst_folder)
-        converter.save_intrinsics()
+        # converter.save_intrinsics()
         converter.save_rgb()
         converter.save_pose()
         if self.get_pose:
@@ -179,7 +210,7 @@ def main():
     reader = BagDataReader(
         raw_folder=args.raw_dir,
         tgt_folder=args.dst_dir,
-        get_depth=False,
+        get_depth=args.with_depth,
         get_pose=args.with_pose
     )
 
