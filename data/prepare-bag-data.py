@@ -138,12 +138,22 @@ class BagConverter(object):
                 print(out.max())
                 break
 
+    def convert2camerapose(self, pose_file='poses.txt'):
+        print("Converting to camera frame")
+        body_pose = np.loadtxt(self.dst_folder / pose_file)
+        cam_pose = []
+        for i in body_pose:
+            i = i.reshape([3,4])
+            i = np.array([[0,-1,0],[0,0,-1],[1,0,0]]) @ i
+            cam_pose.append(i.reshape(1,12))
+        np.savetxt(self.dst_folder / 'cam_pose.txt',cam_pose)
 
 class BagDataReader(object):
     def __init__(self, raw_folder: str, 
                        tgt_folder: str,
                        get_depth: False,
-                       get_pose: True
+                       get_pose: True,
+                       to_camera_frame: False
                        ):
         """
         Args: raw_folder: Path to folder containing bag files for each sequences
@@ -165,6 +175,7 @@ class BagDataReader(object):
         self.scene_names = [n[:-4] for n in os.listdir(raw_folder)] 
         self.get_depth = get_depth
         self.get_pose = get_pose
+        self.to_camera_frame = to_camera_frame
 
         if not os.path.exists(self.tgt_folder):
             os.mkdir(self.tgt_folder)
@@ -186,6 +197,8 @@ class BagDataReader(object):
             converter.save_pose()
         if self.get_depth:
             converter.save_depth()
+        if self.to_camera_frame:
+            converter.convert2camerapose()
 
     def read_multiple_scenes(self):
         for scene_name in self.scene_names:
@@ -204,14 +217,17 @@ def main():
                         help="If available (e.g. with KITTI), will store depth ground truth along with images, for validation")
     parser.add_argument("--with-pose", action='store_true',
                         help="If available (e.g. with KITTI), will store pose ground truth along with images, for validation")
-    
+    parser.add_argument("--to-cam", action='store_true',
+                        help="If available (e.g. with KITTI), will store pose ground truth along with images, for validation")
+
     args = parser.parse_args()
 
     reader = BagDataReader(
         raw_folder=args.raw_dir,
         tgt_folder=args.dst_dir,
         get_depth=args.with_depth,
-        get_pose=args.with_pose
+        get_pose=args.with_pose,
+        to_camera_frame=args.to_cam
     )
 
     reader.read_multiple_scenes()
